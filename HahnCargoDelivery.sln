@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HahnCargoDelivery", "HahnCargoDelivery\HahnCargoDelivery.csproj", "{2694DF99-F72E-42C2-BF88-9AC6CD12CDED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2694DF99-F72E-42C2-BF88-9AC6CD12CDED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2694DF99-F72E-42C2-BF88-9AC6CD12CDED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2694DF99-F72E-42C2-BF88-9AC6CD12CDED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2694DF99-F72E-42C2-BF88-9AC6CD12CDED}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

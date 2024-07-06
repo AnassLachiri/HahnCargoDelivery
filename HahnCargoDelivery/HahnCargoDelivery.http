@@ -1,0 +1,6 @@
+@HahnCargoDelivery_HostAddress = http://localhost:5166
+
+GET {{HahnCargoDelivery_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
