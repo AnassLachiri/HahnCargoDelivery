@@ -1,6 +1,9 @@
+using HahnCargoDelivery.Configs;
 using HahnCargoDelivery.Dtos.Authentication;
+using HahnCargoDelivery.Models;
 using HahnCargoDelivery.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace HahnCargoDelivery.Controllers;
 
@@ -14,12 +17,21 @@ public class WeatherForecastController : ControllerBase
     };
 
     private readonly ILogger<WeatherForecastController> _logger;
-    private readonly ILoginService _loginService;
+    private readonly IAuthService _authService;
+    private readonly IExternalApiService _externalApiService;
+    private readonly HahnCargoSimApiConfig _hahnCargoSimApiConfig;
 
-    public WeatherForecastController(ILogger<WeatherForecastController> logger, ILoginService loginService)
+    public WeatherForecastController(ILogger<WeatherForecastController> logger, IAuthService authService, IExternalApiService externalApiService, IOptions<HahnCargoSimApiConfig> hahnCargoSimApiConfig)
     {
+        if (hahnCargoSimApiConfig.Value == null)
+        {
+            throw new Exception("Configs can't be null");
+        }
+
+        _hahnCargoSimApiConfig = hahnCargoSimApiConfig.Value;
         _logger = logger;
-        _loginService = loginService;
+        _authService = authService;
+        _externalApiService = externalApiService;
     }
 
     [HttpGet(Name = "GetWeatherForecast")]
@@ -37,6 +49,12 @@ public class WeatherForecastController : ControllerBase
     [HttpPost(Name = "Login")]
     public async Task<ActionResult<LoginResponse>> Login()
     {
-        return Ok(await _loginService.Login(new LoginRequest("Anass", "Hahn")));
+        return Ok(await _authService.Login(new LoginRequest("Anass", "Hahn")));
+    }
+    
+    [HttpGet("Grid")]
+    public async Task<ActionResult<Grid>> GetGrid()
+    {
+        return Ok(await _externalApiService.GetAsync<Grid>(_hahnCargoSimApiConfig.Uri + "Grid/Get"));
     }
 }

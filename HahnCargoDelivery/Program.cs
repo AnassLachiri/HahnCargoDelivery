@@ -15,7 +15,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IExternalApiService, ExternalApiService>();
 
 // Add services
-builder.Services.AddScoped<ILoginService, LoginService>();
+builder.Services.AddSingleton<IAuthService, AuthService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
