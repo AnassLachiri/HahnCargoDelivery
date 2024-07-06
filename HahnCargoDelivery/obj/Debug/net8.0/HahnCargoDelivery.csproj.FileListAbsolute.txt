@@ -31,3 +31,4 @@ C:\Users\lachi\RiderProjects\HahnCargoDelivery\HahnCargoDelivery\obj\Debug\net8.
 C:\Users\lachi\RiderProjects\HahnCargoDelivery\HahnCargoDelivery\obj\Debug\net8.0\HahnCargoDelivery.pdb
 C:\Users\lachi\RiderProjects\HahnCargoDelivery\HahnCargoDelivery\obj\Debug\net8.0\HahnCargoDelivery.genruntimeconfig.cache
 C:\Users\lachi\RiderProjects\HahnCargoDelivery\HahnCargoDelivery\obj\Debug\net8.0\ref\HahnCargoDelivery.dll
+C:\Users\lachi\RiderProjects\HahnCargoDelivery\HahnCargoDelivery\bin\Debug\net8.0\RabbitMQ.Client.dll

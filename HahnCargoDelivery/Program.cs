@@ -12,15 +12,19 @@ builder.Services.Configure<HahnCargoSimApiConfig>(builder.Configuration.GetSecti
 builder.Services.AddHttpClient();
 
 // Register your ExternalApiService
-builder.Services.AddScoped<IExternalApiService, ExternalApiService>();
+builder.Services.AddSingleton<IExternalApiService, ExternalApiService>();
 
 // Add services
 builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<IGridService, GridService>();
+builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddHostedService<SimulationService>();
 
 var app = builder.Build();
 
