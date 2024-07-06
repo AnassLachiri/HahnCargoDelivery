@@ -1,3 +1,5 @@
+using HahnCargoDelivery.Dtos.Authentication;
+using HahnCargoDelivery.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HahnCargoDelivery.Controllers;
@@ -12,10 +14,12 @@ public class WeatherForecastController : ControllerBase
     };
 
     private readonly ILogger<WeatherForecastController> _logger;
+    private readonly ILoginService _loginService;
 
-    public WeatherForecastController(ILogger<WeatherForecastController> logger)
+    public WeatherForecastController(ILogger<WeatherForecastController> logger, ILoginService loginService)
     {
         _logger = logger;
+        _loginService = loginService;
     }
 
     [HttpGet(Name = "GetWeatherForecast")]
@@ -28,5 +32,11 @@ public class WeatherForecastController : ControllerBase
                 Summary = Summaries[Random.Shared.Next(Summaries.Length)]
             })
             .ToArray();
+    }
+    
+    [HttpPost(Name = "Login")]
+    public async Task<ActionResult<LoginResponse>> Login()
+    {
+        return Ok(await _loginService.Login(new LoginRequest("Anass", "Hahn")));
     }
 }
