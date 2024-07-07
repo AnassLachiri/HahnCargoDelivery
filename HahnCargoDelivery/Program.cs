@@ -17,7 +17,7 @@ builder.Services.AddSingleton<IExternalApiService, ExternalApiService>();
 // Add services
 builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddSingleton<IGridService, GridService>();
-builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

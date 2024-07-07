@@ -2,5 +2,8 @@
 
 public class SimulationState
 {
-    public Grid grid { get; set; }
+    public Boolean IsSimulationStarted { get; set; } = false;
+    public Grid Grid { get; set; }
+    
+    public List<TransporterInfo> Transporters { get; set; }
 }

@@ -10,6 +10,7 @@ public interface IExternalApiService
     public Task<T?> PostAsync<T>(string requestUri, HttpContent content);
     public Task PostAsync(string requestUri, HttpContent content);
     public Task<T?> PutAsync<T>(string requestUri, HttpContent content);
+    public Task PutAsync(string requestUri, HttpContent content);
     public Task<T?> PatchAsync<T>(string requestUri, HttpContent content);
     public Task<T?> DeleteAsync<T>(string requestUri);
 }
@@ -67,6 +68,17 @@ public class ExternalApiService(HttpClient httpClient, IAuthService authService)
 
         var responseContent = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<T>(responseContent);
+    }
+    
+    public async Task PutAsync(string requestUri, HttpContent content)
+    {
+        var token = authService.GetToken();
+        if (!string.IsNullOrEmpty(token))
+        {
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        var response = await httpClient.PutAsync(requestUri, content);
+        response.EnsureSuccessStatusCode();
     }
     
     public async Task<T?> PatchAsync<T>(string requestUri, HttpContent content)
