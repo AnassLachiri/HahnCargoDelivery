@@ -54,6 +54,7 @@ public class ExternalApiService(HttpClient httpClient, IAuthService authService)
         }
         var response = await httpClient.PostAsync(requestUri, content);
         response.EnsureSuccessStatusCode();
+        
     }
     
     public async Task<T?> PutAsync<T>(string requestUri, HttpContent content)

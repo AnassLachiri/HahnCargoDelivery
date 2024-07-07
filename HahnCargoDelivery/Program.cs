@@ -4,6 +4,18 @@ using HahnCargoDelivery.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins",
+        builder =>
+        {
+            builder.AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        });
+});
+
+// Add services to the container.
 
 builder.Services.Configure<UserInfosConfig>(builder.Configuration.GetSection("UserInfos"));
 builder.Services.Configure<HahnCargoSimApiConfig>(builder.Configuration.GetSection("HahnCargoSimApi"));
@@ -16,6 +28,8 @@ builder.Services.AddSingleton<IExternalApiService, ExternalApiService>();
 
 // Add services
 builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<IOrderService, OrderService>();
+builder.Services.AddSingleton<ITransporterService, TransporterService>();
 builder.Services.AddSingleton<IGridService, GridService>();
 builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 
@@ -24,6 +38,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+
+builder.Services.AddSingleton<SimulationService>();
 builder.Services.AddHostedService<SimulationService>();
 
 var app = builder.Build();

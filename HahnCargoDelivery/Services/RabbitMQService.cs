@@ -9,7 +9,7 @@ namespace HahnCargoDelivery.Services;
 public interface IRabbitMqService
 {
     public void InitRabbitMqListener();
-    public Task StartRabbitMqListener(Action<Order> handleOrderAction, CancellationToken stoppingToken);
+    public Task StartRabbitMqListener(Func<Order, Task> orderHandler, CancellationToken stoppingToken);
     public void DestroyRabbitMqListener();
 }
 public class RabbitMqService: BackgroundService, IRabbitMqService
@@ -17,7 +17,7 @@ public class RabbitMqService: BackgroundService, IRabbitMqService
     private readonly ILogger<RabbitMqService> _logger;
     private IConnection _connection;
     private IModel _channel;
-    private Action<Order>? _handleOrderAction;
+    private Func<Order, Task>? _orderHandler;
 
     public RabbitMqService(ILogger<RabbitMqService> logger)
     {
@@ -36,11 +36,13 @@ public class RabbitMqService: BackgroundService, IRabbitMqService
             exclusive: false,
             autoDelete: false,
             arguments: null);
+        // Set the QoS to 1 to process one message at a time
+        _channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
     }
 
-    public async Task StartRabbitMqListener(Action<Order> handleOrderAction, CancellationToken stoppingToken)
+    public async Task StartRabbitMqListener(Func<Order, Task> orderHandler, CancellationToken stoppingToken)
     {
-        _handleOrderAction = handleOrderAction;
+        _orderHandler = orderHandler;
         await ExecuteAsync(stoppingToken);
     }
     
@@ -54,7 +56,7 @@ public class RabbitMqService: BackgroundService, IRabbitMqService
         stoppingToken.ThrowIfCancellationRequested();
 
         var consumer = new EventingBasicConsumer(_channel);
-        consumer.Received += (model, ea) =>
+        consumer.Received += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
             var message = Encoding.UTF8.GetString(body);
@@ -65,12 +67,15 @@ public class RabbitMqService: BackgroundService, IRabbitMqService
             {
                 throw new Exception("Order can't be null");
             }
-
-            _handleOrderAction?.Invoke(order);
+            if(_orderHandler != null)
+                await _orderHandler(order);
+            
+            // Acknowledge the message only after processing is complete
+            _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
         };
 
         _channel.BasicConsume(queue: "HahnCargoSim_NewOrders",
-            autoAck: true,
+            autoAck: false,
             consumer: consumer);
 
         await Task.CompletedTask;

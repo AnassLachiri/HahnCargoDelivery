@@ -6,9 +6,17 @@ using Microsoft.Extensions.Options;
 
 namespace HahnCargoDelivery.Services;
 
-public class SimulationService(IAuthService authService, IGridService gridService, IExternalApiService externalApiService, IOptions<HahnCargoSimApiConfig> hahnCargoSimApiConfig, ILogger<SimulationService> logger, IRabbitMqService rabbitMqService) : IHostedService
+public class SimulationService(
+        IAuthService authService, 
+        IGridService gridService, 
+        IExternalApiService externalApiService, 
+        IOptions<HahnCargoSimApiConfig> hahnCargoSimApiConfig, 
+        ILogger<SimulationService> logger, 
+        IRabbitMqService rabbitMqService,
+        ITransporterService transporterService,
+        IOrderService orderService) : BackgroundService
 {
-    private readonly SimulationState _simulationState = new SimulationState();
+    private static readonly SimulationState _simulationState = new SimulationState();
 
     private async Task InitializeSimulationState()
     {
@@ -16,11 +24,13 @@ public class SimulationService(IAuthService authService, IGridService gridServic
         await authService.Login(new LoginRequest("Anass", "Hahn"));
         // Get the grid
         _simulationState.Grid = await gridService.GetGrid();
+        _simulationState.Transporters = [];
         _simulationState.IsSimulationStarted = true;
+        await externalApiService.PostAsync(hahnCargoSimApiConfig.Value.Uri + "sim/start", null);
 
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await InitializeSimulationState();
         Console.WriteLine("-------------------------------------");
@@ -32,30 +42,92 @@ public class SimulationService(IAuthService authService, IGridService gridServic
         Console.WriteLine($"Time : {time}");
         Console.WriteLine("-------------------------------------");
 
-        // await externalApiService.PostAsync(hahnCargoSimApiConfig.Value.Uri + "sim/start", null);
-
-        await rabbitMqService.StartRabbitMqListener(order =>
+        await rabbitMqService.StartRabbitMqListener(async order =>
         {
-            // Do something with your order
-            Console.WriteLine($"New Order with Id : {order.Id} and value : {order.Value}");
-        }, cancellationToken);
+            Console.WriteLine($"Enqueuing New Order with Id : {order.Id} and value : {order.Value}");
+            _simulationState.Orders.Enqueue(order);
+        }, stoppingToken);
         logger.LogInformation("RabbitMQListener started.");
         
         Console.WriteLine($"------------------ Test -----------------------");
-        // while (_simulationState.IsSimulationStarted)
-        // {
-        //     foreach (var transporter in _simulationState.Transporters)
-        //     {
-        //         
-        //         
-        //     }
-        // }
-        
+        while (_simulationState.IsSimulationStarted)
+        {
+            await HandleOrders(stoppingToken);
+            await MoveTransporters(stoppingToken);
+            await Task.Delay(1000, stoppingToken);
+        }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    private async Task HandleOrders(CancellationToken cancellationToken)
     {
-        rabbitMqService.DestroyRabbitMqListener();
-        return Task.CompletedTask;
+        var batchCount = 10;
+        while (batchCount > 0 && _simulationState.Orders.Count != 0  && !cancellationToken.IsCancellationRequested)
+        {
+            if (_simulationState.Orders.TryDequeue(out var order))
+            {
+                if (_simulationState.Transporters.Count == 0)
+                {
+                    var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId,
+                        order.TargetNodeId);
+                    var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
+        
+                    if (cost <= 1000)
+                    {
+                        var availableOrders = await orderService.GetAllOrders();
+                        var o = availableOrders.FirstOrDefault(o => o.Id == order.Id);
+                        if (o == null) continue;
+                        await orderService.AcceptOrder(order.Id);
+                        var transporterId = await transporterService.Buy(order.OriginNodeId);
+                        Console.WriteLine($"Transporter bought with transporterId : {transporterId}.");
+                        Console.WriteLine($"Accepting order number: {order.Id}.");
+                        Console.WriteLine($"Order number: {order.Id} accepted.");
+            
+                        var pathQueue = new Queue<int>(path);
+                        pathQueue.Dequeue();
+                        _simulationState.Transporters.Add(new TransporterInfo { Id = transporterId, Orders = [order], PathRemained = pathQueue});
+                    }
+                }
+            }
+            batchCount--;
+        }
     }
+    
+    private async Task MoveTransporters(CancellationToken cancellationToken)
+    {
+        foreach (var transporter in _simulationState.Transporters)
+        {
+            logger.LogInformation($"Handling transporter {transporter.Id}.");
+            var cargoTransporter = await transporterService.Get(transporter.Id);
+            if (cargoTransporter.InTransit)
+            {
+                logger.LogInformation($"Transporter {transporter.Id} is in transit.");
+                continue;
+            }
+            
+            if (transporter.PathRemained.Count > 0)
+            {
+                var targetNode = transporter.PathRemained.Dequeue();
+                await transporterService.Move(transporter.Id, targetNode);
+                logger.LogInformation($"Transporter {transporter.Id} moved to node {targetNode}.");
+                var finishedOrder = transporter.Orders.Find(o => o.TargetNodeId==targetNode);
+                if (finishedOrder != null)
+                {
+                    transporter.Orders.Remove(finishedOrder);
+                    logger.LogInformation($"Order {finishedOrder.Id} delivered and removed from orders.");
+                }
+            }
+            else
+            {
+                logger.LogInformation($"Finished delivering all orders for transporter number {transporter.Id}.");
+                transporter.Orders.Clear();
+            }
+            
+        }
+    }
+
+    public SimulationState GetSimulationState()
+    {
+        return _simulationState;
+    }
+
 }
