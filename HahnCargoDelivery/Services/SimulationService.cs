@@ -70,22 +70,110 @@ public class SimulationService(
                     var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId,
                         order.TargetNodeId);
                     var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
-        
+
                     if (cost <= 1000)
                     {
-                        var availableOrders = await orderService.GetAllOrders();
-                        var o = availableOrders.FirstOrDefault(o => o.Id == order.Id);
-                        if (o == null) continue;
+                        if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
                         await orderService.AcceptOrder(order.Id);
                         var transporterId = await transporterService.Buy(order.OriginNodeId);
                         Console.WriteLine($"Transporter bought with transporterId : {transporterId}.");
                         Console.WriteLine($"Accepting order number: {order.Id}.");
                         Console.WriteLine($"Order number: {order.Id} accepted.");
-            
+
                         var pathQueue = new Queue<int>(path);
                         pathQueue.Dequeue();
-                        _simulationState.Transporters.Add(new TransporterInfo { Id = transporterId, Orders = [order], PathRemained = pathQueue});
+                        _simulationState.Transporters.Add(new TransporterInfo
+                            { Id = transporterId, Orders = [order], PathRemained = pathQueue });
                     }
+                }
+                else
+                {
+                    foreach (var transporter in _simulationState.Transporters)
+                    {
+                        var ordersLoad = transporter.Orders.Sum(o => o.Load);
+                        var cargoTransporter = await transporterService.Get(transporter.Id);
+                        if ((cargoTransporter.Capacity - ordersLoad) > order.Load)
+                        {
+                            if (transporter.PathRemained.Contains(order.OriginNodeId))
+                            {
+                                if (transporter.PathRemained.Contains(order.TargetNodeId))
+                                {
+                                    if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
+                                    await orderService.AcceptOrder(order.Id);
+                                    transporter.Orders.Add(order);
+                                    break;
+                                }
+
+                                var pathToAdd =
+                                    DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.PathRemained.ToArray().Last(), order.TargetNodeId);
+                                var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, pathToAdd);
+                                if (cost < order.Value)
+                                {
+                                    if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
+                                    await orderService.AcceptOrder(order.Id);
+                                    transporter.Orders.Add(order);
+                                    pathToAdd.RemoveAt(0);
+                                    foreach (var node in pathToAdd)
+                                    {
+                                        transporter.PathRemained.Enqueue(node);
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            var firstPathToAdd =
+                                DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.PathRemained.ToArray().Last(), order.OriginNodeId);
+                            var secondPathToAdd =
+                                DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId, order.TargetNodeId);
+                            var firstPathCost = DjikstraHelper.GetTotalCost(_simulationState.Grid, firstPathToAdd);
+                            var secondPathCost = DjikstraHelper.GetTotalCost(_simulationState.Grid, secondPathToAdd);
+
+                            if ((firstPathCost + secondPathCost) < order.Value)
+                            {
+                                if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
+                                await orderService.AcceptOrder(order.Id);
+                            
+                                firstPathToAdd.RemoveAt(0);
+                                secondPathToAdd.RemoveAt(0);
+                                transporter.Orders.Add(order);
+                                foreach (var node in firstPathToAdd)
+                                {
+                                    transporter.PathRemained.Enqueue(node);
+                                }
+                                foreach (var node in secondPathToAdd)
+                                {
+                                    transporter.PathRemained.Enqueue(node);
+                                }
+
+                                break;   
+                            }
+                        }
+                    }
+
+                    if (!_simulationState.Transporters.Exists(t => t.Orders.Exists(o => o.Id == order.Id)))
+                    {
+                        var amountCoins = await externalApiService.GetAsync<int>(hahnCargoSimApiConfig.Value.Uri + "User/CoinAmount");
+                        if (amountCoins > 2000)
+                        {
+                            var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId,
+                                order.TargetNodeId);
+                            var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
+
+                            if (cost < order.Value)
+                            {
+                                if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
+                                await orderService.AcceptOrder(order.Id);
+                                var transporterId = await transporterService.Buy(order.OriginNodeId);
+
+                                var pathQueue = new Queue<int>(path);
+                                pathQueue.Dequeue();
+                                _simulationState.Transporters.Add(new TransporterInfo
+                                    { Id = transporterId, Orders = [order], PathRemained = pathQueue });
+                            }
+                        }
+                    }
+                    
+                    
                 }
             }
             batchCount--;
