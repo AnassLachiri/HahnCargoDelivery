@@ -25,39 +25,4 @@ public class SimulationState
             }
         }
     }
-
-    public void AddTransporter(TransporterInfo transporter)
-    {
-        lock (_transportersLock)
-        {
-            _transporters.Add(transporter);
-        }
-    }
-
-    public bool RemoveTransporter(TransporterInfo transporter)
-    {
-        lock (_transportersLock)
-        {
-            return _transporters.Remove(transporter);
-        }
-    }
-
-    public TransporterInfo GetTransporter(int index)
-    {
-        lock (_transportersLock)
-        {
-            return _transporters[index];
-        }
-    }
-
-    public int TransporterCount
-    {
-        get
-        {
-            lock (_transportersLock)
-            {
-                return _transporters.Count;
-            }
-        }
-    }
 }

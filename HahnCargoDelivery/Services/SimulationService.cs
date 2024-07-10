@@ -33,14 +33,6 @@ public class SimulationService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await InitializeSimulationState();
-        Console.WriteLine("-------------------------------------");
-        var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, 1, 35);
-        var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
-        var time = DjikstraHelper.GetTotalTime(_simulationState.Grid, path);
-        Console.WriteLine($"Path count : {path.Count}");
-        Console.WriteLine($"Cost : {cost}");
-        Console.WriteLine($"Time : {time}");
-        Console.WriteLine("-------------------------------------");
 
         await rabbitMqService.StartRabbitMqListener(async order =>
         {
@@ -70,8 +62,17 @@ public class SimulationService(
                     var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId,
                         order.TargetNodeId);
                     var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
+                    var time = DjikstraHelper.GetTotalTime(_simulationState.Grid, path);
+                    
+                    
+                    Console.WriteLine("----------------------------------------------------------");
+                    Console.WriteLine($"order.ExpirationDate => {order.ExpirationDateUtc}");
+                    Console.WriteLine($"DateTime.Now => {DateTime.Now}");
+                    Console.WriteLine($"time => {time}");
+                    Console.WriteLine($"DateTime.Now + time => {DateTime.Now + time}");
+                    Console.WriteLine("----------------------------------------------------------");
 
-                    if (cost <= 1000)
+                    if (cost <= 1000 && order.ExpirationDateUtc > DateTime.Now + time)
                     {
                         if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
                         await orderService.AcceptOrder(order.Id);
@@ -83,7 +84,7 @@ public class SimulationService(
                         var pathQueue = new Queue<int>(path);
                         pathQueue.Dequeue();
                         _simulationState.Transporters.Add(new TransporterInfo
-                            { Id = transporterId, Orders = [order], PathRemained = pathQueue });
+                            { Id = transporterId, Orders = [order], RemainingPath = pathQueue });
                     }
                 }
                 else
@@ -92,11 +93,16 @@ public class SimulationService(
                     {
                         var ordersLoad = transporter.Orders.Sum(o => o.Load);
                         var cargoTransporter = await transporterService.Get(transporter.Id);
-                        if ((cargoTransporter.Capacity - ordersLoad) > order.Load)
+                        
+                        var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.RemainingPath.Peek(),
+                            order.TargetNodeId);
+                        var time = DjikstraHelper.GetTotalTime(_simulationState.Grid, path);
+                        
+                        if ((cargoTransporter.Capacity - ordersLoad) > order.Load && order.ExpirationDateUtc > DateTime.Now + time)
                         {
-                            if (transporter.PathRemained.Contains(order.OriginNodeId))
+                            if (transporter.RemainingPath.Contains(order.OriginNodeId))
                             {
-                                if (transporter.PathRemained.Contains(order.TargetNodeId))
+                                if (transporter.RemainingPath.Contains(order.TargetNodeId))
                                 {
                                     if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
                                     await orderService.AcceptOrder(order.Id);
@@ -105,7 +111,7 @@ public class SimulationService(
                                 }
 
                                 var pathToAdd =
-                                    DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.PathRemained.ToArray().Last(), order.TargetNodeId);
+                                    DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.RemainingPath.ToArray().Last(), order.TargetNodeId);
                                 var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, pathToAdd);
                                 if (cost < order.Value)
                                 {
@@ -115,14 +121,14 @@ public class SimulationService(
                                     pathToAdd.RemoveAt(0);
                                     foreach (var node in pathToAdd)
                                     {
-                                        transporter.PathRemained.Enqueue(node);
+                                        transporter.RemainingPath.Enqueue(node);
                                     }
                                     break;
                                 }
                             }
                             
                             var firstPathToAdd =
-                                DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.PathRemained.ToArray().Last(), order.OriginNodeId);
+                                DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.RemainingPath.ToArray().Last(), order.OriginNodeId);
                             var secondPathToAdd =
                                 DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId, order.TargetNodeId);
                             var firstPathCost = DjikstraHelper.GetTotalCost(_simulationState.Grid, firstPathToAdd);
@@ -138,11 +144,11 @@ public class SimulationService(
                                 transporter.Orders.Add(order);
                                 foreach (var node in firstPathToAdd)
                                 {
-                                    transporter.PathRemained.Enqueue(node);
+                                    transporter.RemainingPath.Enqueue(node);
                                 }
                                 foreach (var node in secondPathToAdd)
                                 {
-                                    transporter.PathRemained.Enqueue(node);
+                                    transporter.RemainingPath.Enqueue(node);
                                 }
 
                                 break;   
@@ -153,13 +159,16 @@ public class SimulationService(
                     if (!_simulationState.Transporters.Exists(t => t.Orders.Exists(o => o.Id == order.Id)))
                     {
                         var amountCoins = await externalApiService.GetAsync<int>(hahnCargoSimApiConfig.Value.Uri + "User/CoinAmount");
-                        if (amountCoins > 2000)
+                        var remindPathCost = _simulationState.Transporters.Sum(t =>
+                            DjikstraHelper.GetTotalCost(_simulationState.Grid, t.RemainingPath.ToList()));
+                        if (amountCoins > remindPathCost+1200)
                         {
                             var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, order.OriginNodeId,
                                 order.TargetNodeId);
                             var cost = DjikstraHelper.GetTotalCost(_simulationState.Grid, path);
-
-                            if (cost < order.Value)
+                            var time = DjikstraHelper.GetTotalTime(_simulationState.Grid, path);
+                            
+                            if (cost < order.Value && order.ExpirationDateUtc > DateTime.Now + time)
                             {
                                 if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
                                 await orderService.AcceptOrder(order.Id);
@@ -168,7 +177,7 @@ public class SimulationService(
                                 var pathQueue = new Queue<int>(path);
                                 pathQueue.Dequeue();
                                 _simulationState.Transporters.Add(new TransporterInfo
-                                    { Id = transporterId, Orders = [order], PathRemained = pathQueue });
+                                    { Id = transporterId, Orders = [order], RemainingPath = pathQueue });
                             }
                         }
                     }
@@ -192,9 +201,9 @@ public class SimulationService(
                 continue;
             }
             
-            if (transporter.PathRemained.Count > 0)
+            if (transporter.RemainingPath.Count > 0)
             {
-                var targetNode = transporter.PathRemained.Dequeue();
+                var targetNode = transporter.RemainingPath.Dequeue();
                 await transporterService.Move(transporter.Id, targetNode);
                 logger.LogInformation($"Transporter {transporter.Id} moved to node {targetNode}.");
                 var finishedOrder = transporter.Orders.Find(o => o.TargetNodeId==targetNode);

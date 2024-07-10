@@ -7,6 +7,6 @@ public class Order
     public int TargetNodeId { get; set; }
     public int Load { get; set; }
     public int Value { get; set; }
-    public DateTime DeliveryDate { get; set; }
-    public DateTime ExpirationDate { get; set; }
+    public DateTime DeliveryDateUtc { get; set; }
+    public DateTime ExpirationDateUtc { get; set; }
 }

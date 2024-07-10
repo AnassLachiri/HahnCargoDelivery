@@ -67,6 +67,7 @@ public class RabbitMqService: BackgroundService, IRabbitMqService
             {
                 throw new Exception("Order can't be null");
             }
+            _logger.LogInformation($"Received message(DateTime): {order.ExpirationDateUtc}");
             if(_orderHandler != null)
                 await _orderHandler(order);
             

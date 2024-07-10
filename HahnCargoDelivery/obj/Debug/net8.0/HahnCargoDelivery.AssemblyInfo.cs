@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HahnCargoDelivery")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b42f92c10339d4e4980b74ef1d3003842cf2ba91")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6dcbee5cb83d842a0ed2d4d716707e130f52a57a")]
 [assembly: System.Reflection.AssemblyProductAttribute("HahnCargoDelivery")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HahnCargoDelivery")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
