@@ -1,5 +1,4 @@
 ﻿using HahnCargoDelivery.Configs;
-using HahnCargoDelivery.Dtos.Authentication;
 using HahnCargoDelivery.Helpers;
 using HahnCargoDelivery.Models;
 using Microsoft.Extensions.Options;
@@ -7,7 +6,6 @@ using Microsoft.Extensions.Options;
 namespace HahnCargoDelivery.Services;
 
 public class SimulationService(
-        IAuthService authService, 
         IGridService gridService, 
         IExternalApiService externalApiService, 
         IOptions<HahnCargoSimApiConfig> hahnCargoSimApiConfig, 
@@ -17,22 +15,32 @@ public class SimulationService(
         IOrderService orderService) : BackgroundService
 {
     private static readonly SimulationState _simulationState = new SimulationState();
+    public bool SimInitialized = false;
 
-    private async Task InitializeSimulationState()
+    public async Task InitializeSimulationState()
     {
-        // Login to get auth token
-        await authService.Login(new LoginRequest("Anass", "Hahn"));
-        // Get the grid
         _simulationState.Grid = await gridService.GetGrid();
         _simulationState.Transporters = [];
+        SimInitialized = true;
+    }
+
+    public async Task StartSimulation()
+    {
         _simulationState.IsSimulationStarted = true;
         await externalApiService.PostAsync(hahnCargoSimApiConfig.Value.Uri + "sim/start", null);
-
+    }
+    
+    public async Task StopSimulation()
+    {
+        Console.WriteLine("Stopping Simulation");
+        _simulationState.IsSimulationStarted = false;
+        await externalApiService.PostAsync(hahnCargoSimApiConfig.Value.Uri + "sim/stop", null);
+        Console.WriteLine("Simulation stopped");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await InitializeSimulationState();
+        // await InitializeSimulationState();
 
         await rabbitMqService.StartRabbitMqListener(async order =>
         {
@@ -42,10 +50,14 @@ public class SimulationService(
         logger.LogInformation("RabbitMQListener started.");
         
         Console.WriteLine($"------------------ Test -----------------------");
-        while (_simulationState.IsSimulationStarted)
+        while (true)
         {
-            await HandleOrders(stoppingToken);
-            await MoveTransporters(stoppingToken);
+            Console.WriteLine("Looping ...");
+            if (_simulationState.IsSimulationStarted)
+            {
+                await HandleOrders(stoppingToken);
+                await MoveTransporters(stoppingToken);
+            }
             await Task.Delay(1000, stoppingToken);
         }
     }
@@ -75,8 +87,8 @@ public class SimulationService(
                     if (cost <= 1000 && order.ExpirationDateUtc > DateTime.Now + time)
                     {
                         if ((await orderService.GetAllOrders()).Find(o => o.Id == order.Id) == null) continue;
-                        await orderService.AcceptOrder(order.Id);
                         var transporterId = await transporterService.Buy(order.OriginNodeId);
+                        await orderService.AcceptOrder(order.Id);
                         Console.WriteLine($"Transporter bought with transporterId : {transporterId}.");
                         Console.WriteLine($"Accepting order number: {order.Id}.");
                         Console.WriteLine($"Order number: {order.Id} accepted.");
@@ -92,6 +104,8 @@ public class SimulationService(
                     foreach (var transporter in _simulationState.Transporters)
                     {
                         var ordersLoad = transporter.Orders.Sum(o => o.Load);
+                        
+                        Console.WriteLine($"searching for transporter: {transporter.Id}.");
                         var cargoTransporter = await transporterService.Get(transporter.Id);
                         
                         var path = DjikstraHelper.GetShortestPath(_simulationState.Grid, transporter.RemainingPath.Peek(),
@@ -193,7 +207,7 @@ public class SimulationService(
     {
         foreach (var transporter in _simulationState.Transporters)
         {
-            logger.LogInformation($"Handling transporter {transporter.Id}.");
+            Console.WriteLine($"Handling transporter {transporter.Id}.");
             var cargoTransporter = await transporterService.Get(transporter.Id);
             if (cargoTransporter.InTransit)
             {
@@ -209,6 +223,7 @@ public class SimulationService(
                 var finishedOrder = transporter.Orders.Find(o => o.TargetNodeId==targetNode);
                 if (finishedOrder != null)
                 {
+                    _simulationState.DeliveredOrders.Add(finishedOrder);
                     transporter.Orders.Remove(finishedOrder);
                     logger.LogInformation($"Order {finishedOrder.Id} delivered and removed from orders.");
                 }
